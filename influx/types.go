@@ -17,11 +17,11 @@ func (d Duration) MarshalInflux() (string, error) {
 	}
 	switch d.To {
 	case time.Nanosecond:
-		return strconv.FormatInt(duration.Nanoseconds(), 10), nil
+		return strconv.FormatInt(duration.Nanoseconds(), 10) + "i", nil
 	case time.Microsecond:
-		return strconv.FormatInt(duration.Microseconds(), 10), nil
+		return strconv.FormatInt(duration.Microseconds(), 10) + "i", nil
 	case time.Millisecond:
-		return strconv.FormatInt(duration.Milliseconds(), 10), nil
+		return strconv.FormatInt(duration.Milliseconds(), 10) + "i", nil
 	case time.Second:
 		return strconv.FormatFloat(duration.Seconds(), 'f', 2, 64), nil
 	case time.Minute:
