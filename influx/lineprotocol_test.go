@@ -8,6 +8,8 @@ import (
 )
 
 func TestExtractTagKeyVal(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		Sample   string
 		Expected []string
@@ -474,6 +476,7 @@ func (m TestMeasurementOverride) InfluxMeasurement() string { return "download" 
 
 func TestInfluxMeasurement(t *testing.T) {
 	t.Parallel()
+
 	t.Run("func", func(t *testing.T) {
 		ts := time.Now()
 
@@ -501,6 +504,56 @@ func TestInfluxMeasurement(t *testing.T) {
 		}
 
 		expected := "upload,worker=1 execTime=17.50 " + strconv.FormatInt(ts.UnixNano(), 10)
+		row := ConvertToInfluxLineProtocol(v)
+		if expected != row {
+			t.Errorf("expected: %s, got: %s", expected, row)
+		}
+	})
+}
+
+type TestTimestamp struct {
+	Name          string   `influx:",measurement"`
+	ExecutionTime Duration `influx:"execTime,field"`
+}
+
+func (m TestTimestamp) InfluxTimestamp() time.Time {
+	return time.Date(2024, time.April, 10, 23, 23, 23, 0, time.UTC)
+}
+
+type TestTimestampOverride struct {
+	Name          string    `influx:",measurement"`
+	Timestamp     time.Time `influx:",timestamp"`
+	ExecutionTime Duration  `influx:"execTime,field"`
+}
+
+func (m TestTimestampOverride) InfluxTimestamp() time.Time {
+	return time.Date(2024, time.April, 10, 23, 23, 23, 0, time.UTC)
+}
+
+func TestInfluxTimestamp(t *testing.T) {
+	t.Parallel()
+
+	t.Run("func", func(t *testing.T) {
+		v := TestTimestamp{
+			Name:          "backup",
+			ExecutionTime: Duration{Value: "45m", To: time.Minute},
+		}
+		expected := "backup execTime=45.00 " + strconv.FormatInt(time.Date(2024, time.April, 10, 23, 23, 23, 0, time.UTC).UnixNano(), 10)
+		row := ConvertToInfluxLineProtocol(v)
+		if expected != row {
+			t.Errorf("expected: %s, got: %s", expected, row)
+		}
+	})
+
+	t.Run("override", func(t *testing.T) {
+		ts := time.Date(2024, time.November, 15, 13, 15, 17, 0, time.UTC)
+		v := TestTimestampOverride{
+			Name:          "backup",
+			Timestamp:     ts,
+			ExecutionTime: Duration{Value: "45m", To: time.Minute},
+		}
+
+		expected := "backup execTime=45.00 " + strconv.FormatInt(ts.UnixNano(), 10)
 		row := ConvertToInfluxLineProtocol(v)
 		if expected != row {
 			t.Errorf("expected: %s, got: %s", expected, row)
