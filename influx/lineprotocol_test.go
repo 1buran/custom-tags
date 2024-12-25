@@ -349,6 +349,34 @@ func TestConvertToInfluxLineProtocol(t *testing.T) {
 		}
 	})
 
+	t.Run("error/field", func(t *testing.T) {
+		ts := time.Now()
+
+		v := struct {
+			Mode   string `influx:",measurement"`
+			Worker string `influx:"worker,tag"`
+
+			Timestamp time.Time `influx:",timestamp"`
+
+			Errors int
+			Rate   float64
+
+			ExecutionTime Duration
+		}{
+			Mode:          "aggregate",
+			Worker:        "main",
+			Timestamp:     ts,
+			Errors:        121,
+			Rate:          45.678891,
+			ExecutionTime: Duration{Value: "1m17.276156216s", To: time.Second},
+		}
+
+		row := ConvertToInfluxLineProtocol(v)
+		if !strings.Contains(row, "error: points must have at least one field") {
+			t.Errorf("expected error, got: %s", row)
+		}
+	})
+
 	t.Run("ok", func(t *testing.T) {
 		ts := time.Now()
 
