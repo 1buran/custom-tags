@@ -1,12 +1,36 @@
 package influx
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
 
 func TestDuration(t *testing.T) {
 	t.Parallel()
+	t.Run("default", func(t *testing.T) {
+		d := Duration{Value: "13h23m12.234444234s"}
+		influxRepr, err := d.MarshalInflux()
+		if err != nil {
+			t.Error(err)
+		}
+		if "13h23m12.234444234s" != influxRepr {
+			t.Errorf("expected 13h23m12.234444234s, got: %s", influxRepr)
+		}
+	})
+	t.Run("error", func(t *testing.T) {
+		d := Duration{Value: "345.12"}
+		influxRepr, err := d.MarshalInflux()
+		if err == nil {
+			t.Error("expected error not found")
+		}
+		if !strings.Contains(err.Error(), "missing unit in duration") {
+			t.Errorf("expected 'missing unit in duration' error, got: %s", err)
+		}
+		if "" != influxRepr {
+			t.Errorf("expected empty, got: %s", influxRepr)
+		}
+	})
 	t.Run("int/nano", func(t *testing.T) {
 		d := Duration{Value: "12ns", To: time.Nanosecond}
 		influxRepr, err := d.MarshalInflux()
