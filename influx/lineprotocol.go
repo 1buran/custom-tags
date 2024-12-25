@@ -8,6 +8,42 @@ import (
 	"time"
 )
 
+func extractTagKeyVal(s string) (key string, val string) {
+	idx := strings.LastIndex(s, ",")
+	if idx == -1 {
+		return
+	}
+	if idx-1 > 1 {
+		key = s[:idx]
+	}
+	if idx+1 < len(s) {
+		val = s[idx+1:]
+	}
+	return
+}
+
+func escapeMeasurement(s string) string {
+	for _, v := range []string{",", " "} {
+		s = strings.ReplaceAll(s, v, "\\"+v)
+	}
+	return s
+}
+
+func escapeTagKVFieldK(s string) string {
+	for _, v := range []string{",", "=", " "} {
+		s = strings.ReplaceAll(s, v, "\\"+v)
+	}
+	return s
+}
+
+func escapeFiledV(s string) string {
+	for _, v := range []string{`"`, `\`} {
+		s = strings.ReplaceAll(s, v, "\\"+v)
+	}
+	s = fmt.Sprintf("%q", s)
+	return s
+}
+
 // Convert struct to influxdb line protocol.
 //
 // The structs should describe their reflection to influx line protocol format with struct tags:
@@ -49,8 +85,8 @@ func ConvertToInfluxLineProtocol(v any) string {
 
 	for i := range at.NumField() {
 		if tag, ok := at.Field(i).Tag.Lookup("influx"); ok {
-			params := strings.Split(tag, ",")
-			metricName, metricType := params[0], params[1]
+			k, v := extractTagKeyVal(tag)
+			metricName, metricType := escapeTagKVFieldK(k), v
 
 			switch metricType {
 			case "measurement":
@@ -74,13 +110,23 @@ func ConvertToInfluxLineProtocol(v any) string {
 					continue
 				}
 
-				// Default marshaling, based on primitive types:
-				mval := fmt.Sprintf("%s=%v", metricName, vt.FieldByName(at.Field(i).Name))
+				mval := fmt.Sprintf("%s=", metricName)
+
 				switch at.Field(i).Type.Kind() {
-				case reflect.Int:
-					mval += "i"
-				case reflect.Uint64:
-					mval += "u"
+				case reflect.String:
+					s := vt.FieldByName(at.Field(i).Name).Interface().(string)
+					if metricType == "tag" {
+						s = escapeTagKVFieldK(s)
+					} else if metricType == "field" {
+						s = escapeFiledV(s)
+					}
+					mval += s
+				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+					mval += fmt.Sprintf("%vi", vt.FieldByName(at.Field(i).Name))
+				case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+					mval += fmt.Sprintf("%vu", vt.FieldByName(at.Field(i).Name))
+				default:
+					mval += fmt.Sprintf("%v", vt.FieldByName(at.Field(i).Name))
 				}
 				metric[metricType] = append(metric[metricType], mval)
 			}
@@ -95,6 +141,20 @@ func ConvertToInfluxLineProtocol(v any) string {
 		return "error: `influx:\",timestamp\"` not found"
 	}
 
-	return fmt.Sprintf("%s,%s %s %d", measurement, strings.Join(metric["tag"], ","),
-		strings.Join(metric["field"], ","), timestamp.UnixNano())
+	if len(metric["field"]) == 0 {
+		return "error: points must have at least one field"
+	}
+
+	measurement = escapeMeasurement(measurement)
+
+	if len(metric["tag"]) >= 1 {
+		return fmt.Sprintf(
+			"%s,%s %s %d", measurement, strings.Join(metric["tag"], ","),
+			strings.Join(metric["field"], ","), timestamp.UnixNano(),
+		)
+	}
+
+	return fmt.Sprintf(
+		"%s %s %d", measurement, strings.Join(metric["field"], ","), timestamp.UnixNano(),
+	)
 }
