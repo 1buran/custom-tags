@@ -99,10 +99,12 @@ func ConvertToInfluxLineProtocol(v any) string {
 					r := marshal.Func.Call([]reflect.Value{
 						vt.FieldByName(at.Field(i).Name),
 					})
+
 					val := r[0].Interface().(string)
 					err, ok := r[1].Interface().(error)
 					if ok && err != nil {
-						log.Println(err)
+						log.Printf(
+							"%s %q MarshalInflux error: %s", metricType, metricName, err)
 						continue
 					}
 					metric[metricType] = append(

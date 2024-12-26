@@ -1,6 +1,8 @@
 package influx
 
 import (
+	"errors"
+	"log"
 	"strconv"
 	"strings"
 	"testing"
@@ -557,6 +559,75 @@ func TestInfluxTimestamp(t *testing.T) {
 		row := ConvertToInfluxLineProtocol(v)
 		if expected != row {
 			t.Errorf("expected: %s, got: %s", expected, row)
+		}
+	})
+}
+
+// For example we have data in our db in format: label,value
+// we are interesting only in value, so need some kind of parsing before
+// send this to influxdb.
+type SpecialString string
+
+func (s SpecialString) MarshalInflux() (string, error) {
+	if !strings.Contains(string(s), ",") {
+		return "", errors.New("wrong format")
+	}
+
+	value := strings.Split(string(s), ",")[1]
+	return value, nil
+}
+
+type TestMarshal struct {
+	Name      string        `influx:",measurement"`
+	Timestamp time.Time     `influx:",timestamp"`
+	Weight    int64         `influx:"weight,field"`
+	Sensor    SpecialString `influx:"temperature,field"`
+}
+
+func TestMarshalInflux(t *testing.T) {
+	t.Parallel()
+
+	t.Run("ok", func(t *testing.T) {
+		ts := time.Now()
+
+		v := TestMarshal{
+			Name:      "starship",
+			Timestamp: ts,
+			Weight:    5000,
+			Sensor:    "onboard,45.16",
+		}
+
+		expected := "starship weight=5000i,temperature=45.16 " + strconv.FormatInt(ts.UnixNano(), 10)
+		row := ConvertToInfluxLineProtocol(v)
+		if expected != row {
+			t.Errorf("expected: %s, got: %s", expected, row)
+		}
+	})
+
+	t.Run("error", func(t *testing.T) {
+		var buf strings.Builder
+		log.SetOutput(&buf) // capture log messages
+
+		ts := time.Now()
+
+		v := TestMarshal{
+			Name:      "starship",
+			Timestamp: ts,
+			Weight:    5000,
+			Sensor:    "onboard=45.16",
+		}
+
+		// sensor is omitted due to wrong format of SpecialString value
+		expected := "starship weight=5000i " + strconv.FormatInt(ts.UnixNano(), 10)
+		row := ConvertToInfluxLineProtocol(v)
+		if expected != row {
+			t.Errorf("expected: %s, got: %s", expected, row)
+		}
+
+		expectedLogMessage := `field "temperature" MarshalInflux error: wrong format`
+		if !strings.Contains(buf.String(), expectedLogMessage) {
+			t.Errorf(
+				"expected error in log output: %s, got: %s", expectedLogMessage, buf.String())
 		}
 	})
 }
