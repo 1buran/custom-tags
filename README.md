@@ -9,7 +9,7 @@ This is lib for dump Go structs to different exotic formats (currently supported
 ## Getting Started
 
 > [!CAUTION]
-> The lib is very very alpha stage, so its api may change!
+> This is alpha stage, so library api may change!
 
 Convert Go structs to influxdb line protocol format.
 
